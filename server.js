@@ -7,10 +7,11 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const cookieParser =require("cookie-parser")
 const path = require("path");
+const errorMiddleware = require("./middleware/error-handler");
 const serverPath = path.resolve(__dirname, "server.js");
 require(serverPath);
-
-
+const adminRoute = require('./routes/adminRoutes')
+const userRoute = require('./routes/userRoutes')
 // Configure Cloudinary with your credentials
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_NAME,
@@ -36,7 +37,11 @@ app.get("/", (req, res) => {
   res.send(`Server now running`);
 });
 
+app.use("/api/v1/admin",adminRoute);
+app.use("/api/v1/user",userRoute);
+
 // error middleware here
+app.use(errorMiddleware)
 
 const PORT =  process.env.PORT || 10000
 

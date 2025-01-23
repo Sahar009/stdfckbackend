@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
   gender: {
     type: String,
     required: [true, 'Please specify gender'],
-    enum: ['male', 'female', 'other']
+    enum: ['male', 'female']
   },
   address: {
     type: String,
@@ -51,9 +51,12 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Please add a password'],
-    match: [/^\d+$/, 'Password must contain only numbers'],
     minLength: [6, 'Password must be at least 6 digits'],
   },
+  isApproved: {
+    type: Boolean,
+    default: false
+},
   accountNumber: {
     type: String,
     unique: true,
@@ -70,7 +73,9 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpire: Date,
 });
 
 const User = mongoose.model('User', userSchema);
