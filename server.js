@@ -12,11 +12,12 @@ const serverPath = path.resolve(__dirname, "server.js");
 require(serverPath);
 const adminRoute = require('./routes/adminRoutes')
 const userRoute = require('./routes/userRoutes')
+const walletRoute = require('./routes/walletRoutes')
 // Configure Cloudinary with your credentials
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_NAME,
-    api_key: process.env.CLOUDINARY_KEY,
-    api_secret: process.env.CLOUDINARY_SECRET,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
   });
   
   //==============================middlewares:
@@ -26,7 +27,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(cors({
-  origin:["http://localhost:3000"],
+  origin:["http://localhost:5173"],
   credentials:true
 }));
 
@@ -39,7 +40,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/admin",adminRoute);
 app.use("/api/v1/user",userRoute);
-
+app.use("/api/v1/user",walletRoute);
 // error middleware here
 app.use(errorMiddleware)
 

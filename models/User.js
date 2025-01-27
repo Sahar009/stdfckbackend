@@ -76,6 +76,18 @@ const userSchema = new mongoose.Schema({
   },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
+  avatar: {
+    public_id: String,
+    url: String,
+  },
+  idCard: {
+    public_id: String,
+    url: String,
+    verified: {
+      type: Boolean,
+      default: false
+    }
+  }
 });
 
 const User = mongoose.model('User', userSchema);

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { generateToken } = require('../utils');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
+const { sendAccountApprovedEmail } = require('../utils/emailService');
 
 // @desc    Register a new admin
 // @route   POST /api/admin/register
@@ -142,6 +143,20 @@ const approveUser = async (req, res) => {
 
         user.isApproved = true;
         await user.save();
+
+        // Send approval email notification
+        try {
+            await sendAccountApprovedEmail(user.email, {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                accountNumber: user.accountNumber,
+                email: user.email,
+                loginUrl: process.env.FRONTEND_URL + '/login'
+            });
+        } catch (emailError) {
+            console.error('Error sending approval email:', emailError);
+            // Continue with the response even if email fails
+        }
 
         res.status(200).json({
             success: true,
@@ -319,6 +334,231 @@ const getTransactionStats = async (req, res) => {
     }
 };
 
+// @desc    Verify user's ID card
+// @route   PUT /api/admin/verify-id/:userId
+// @access  Private (Admin only)
+const verifyUserIdCard = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Find user
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Check if ID card exists
+        if (!user.idCard || !user.idCard.url) {
+            return res.status(400).json({
+                success: false,
+                message: 'User has not uploaded an ID card'
+            });
+        }
+
+        // Update ID card verification status
+        user.idCard.verified = true;
+
+        // Add to admin's action log
+        const admin = await Admin.findById(req.admin._id);
+        admin.actionsLog.push({
+            action: 'ID_VERIFICATION',
+            userId: user._id,
+            timestamp: Date.now()
+        });
+
+        // Save both user and admin documents
+        await Promise.all([user.save(), admin.save()]);
+
+        res.status(200).json({
+            success: true,
+            message: 'ID card verified successfully',
+            data: {
+                userId: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                idCard: user.idCard
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error verifying ID card',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get users with unverified ID cards
+// @route   GET /api/admin/unverified-ids
+// @access  Private (Admin only)
+const getUnverifiedIds = async (req, res) => {
+    try {
+        const users = await User.find({
+            'idCard.url': { $exists: true },
+            'idCard.verified': false
+        }).select('firstName lastName email idCard createdAt');
+
+        res.status(200).json({
+            success: true,
+            count: users.length,
+            data: users
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching unverified IDs',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get all users
+// @route   GET /api/admin/users
+// @access  Private (Admin only)
+const getAllUsers = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, search } = req.query;
+        
+        // Build query
+        let query = {};
+        if (search) {
+            query = {
+                $or: [
+                    { firstName: { $regex: search, $options: 'i' } },
+                    { lastName: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } },
+                    { accountNumber: { $regex: search, $options: 'i' } }
+                ]
+            };
+        }
+
+        // Get users with pagination
+        const users = await User.find(query)
+            .select('-password')
+            .sort({ createdAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        // Get total count for pagination
+        const count = await User.countDocuments(query);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                users,
+                totalPages: Math.ceil(count / limit),
+                currentPage: parseInt(page),
+                totalUsers: count
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching users',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get single user by ID
+// @route   GET /api/admin/users/:id
+// @access  Private (Admin only)
+const getUserById = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id)
+            .select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Delete user
+// @route   DELETE /api/admin/users/:id
+// @access  Private (Admin only)
+const deleteUser = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Check if user has any active transactions
+        const activeTransactions = await Transaction.find({
+            $or: [
+                { sender: user._id, status: 'pending' },
+                { receiver: user._id, status: 'pending' }
+            ]
+        });
+
+        if (activeTransactions.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete user with pending transactions'
+            });
+        }
+
+        // Log the deletion in admin's action log
+        const admin = await Admin.findById(req.admin._id);
+        admin.actionsLog.push({
+            action: 'USER_DELETION',
+            userId: user._id,
+            timestamp: Date.now()
+        });
+
+        // Delete user's transactions
+        await Transaction.deleteMany({
+            $or: [
+                { sender: user._id },
+                { receiver: user._id }
+            ]
+        });
+
+        // Delete the user
+        await user.deleteOne();
+        await admin.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'User deleted successfully'
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting user',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     loginAdmin,
@@ -326,5 +566,10 @@ module.exports = {
     approveUser,
     getAllTransactions,
     getTransactionById,
-    getTransactionStats
+    getTransactionStats,
+    verifyUserIdCard,
+    getUnverifiedIds,
+    getAllUsers,
+    getUserById,
+    deleteUser
 };

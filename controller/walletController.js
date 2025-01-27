@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Transaction = require('../models/Transaction');
 const { v4: uuidv4 } = require('uuid');
+const { sendAdminCreditEmail } = require('../utils/emailService');
 
 // @desc    Transfer money between users
 // @route   POST /api/wallet/transfer
@@ -21,10 +22,19 @@ const transferMoney = async (req, res) => {
         const sender = await User.findById(senderId);
         const receiver = await User.findOne({ accountNumber: receiverAccountNumber });
 
+        // Check if receiver exists
         if (!receiver) {
             return res.status(404).json({
                 success: false,
                 message: 'Receiver account not found'
+            });
+        }
+
+        // Prevent self-transfer
+        if (sender.accountNumber === receiverAccountNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot transfer to your own account'
             });
         }
 
@@ -58,6 +68,17 @@ const transferMoney = async (req, res) => {
         await sender.save();
         await receiver.save();
 
+        // Send email notification
+        await sendMoneyReceivedEmail(receiver.email, {
+            receiverName: receiver.name,
+            senderName: sender.name,
+            amount: amount.toFixed(2),
+            reference: transaction.reference,
+            description,
+            date: new Date().toLocaleString(),
+            newBalance: receiver.balance.toFixed(2)
+        });
+
         res.status(200).json({
             success: true,
             data: transaction
@@ -84,6 +105,10 @@ const adminCreditUser = async (req, res) => {
                 message: 'All fields are required'
             });
         }
+        
+        // Convert amount to number
+        const numericAmount = parseFloat(amount);
+        
         const adminId = req.admin._id; // From auth middleware
 
         // Find user
@@ -99,7 +124,7 @@ const adminCreditUser = async (req, res) => {
         const transaction = await Transaction.create({
             sender: adminId,
             receiver: user._id,
-            amount,
+            amount: numericAmount, // Use converted amount
             type: 'admin-credit',
             description,
             reference: uuidv4(),
@@ -107,7 +132,7 @@ const adminCreditUser = async (req, res) => {
         });
 
         // Update user balance
-        user.balance += amount;
+        user.balance += numericAmount; // Use converted amount
         user.transactions.push(transaction._id);
         await user.save();
 
@@ -116,10 +141,25 @@ const adminCreditUser = async (req, res) => {
         admin.actionsLog.push({
             action: 'credit',
             userId: user._id,
-            amount,
+            amount: numericAmount, // Use converted amount
             timestamp: Date.now()
         });
         await admin.save();
+
+        // Send email notification
+        try {
+            await sendAdminCreditEmail(user.email, {
+                userName: `${user.firstName} ${user.lastName}`,
+                amount: numericAmount.toFixed(2), 
+                reference: transaction.reference,
+                description,
+                date: new Date().toLocaleString(),
+                newBalance: user.balance.toFixed(2)
+            });
+        } catch (emailError) {
+            console.error('Error sending credit notification email:', emailError);
+            // Continue with the response even if email fails
+        }
 
         res.status(200).json({
             success: true,

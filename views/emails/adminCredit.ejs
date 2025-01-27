@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Account Credited</title>
+    <style>
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .amount {
+            font-size: 24px;
+            color: #2ecc71;
+            font-weight: bold;
+        }
+        .details {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .credit-header {
+            color: #2ecc71;
+            text-align: center;
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <h2 class="credit-header">Account Credited! 💰</h2>
+        <p>Hello <%= userName %>,</p>
+        <p>Your account has been credited by the administrator.</p>
+        
+        <div class="details">
+            <p>Amount: <span class="amount">$<%= amount %></span></p>
+            <p>Transaction Reference: <%= reference %></p>
+            <% if (description) { %>
+            <p>Description: <%= description %></p>
+            <% } %>
+            <p>Date: <%= date %></p>
+            <p>New Balance: $<%= newBalance %></p>
+        </div>
+        
+        <p>Thank you for banking with us!</p>
+        
+        <p>Best regards,<br>Unity Banking Team</p>
+        
+        <hr>
+        <p style="font-size: 12px; color: #666;">
+            This is an automated message. Please do not reply directly to this email.
+            For support, please contact our customer service team.
+        </p>
+    </div>
+</body>
+</html> 

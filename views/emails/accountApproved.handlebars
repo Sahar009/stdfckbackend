@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Account Approved</title>
+    <style>
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .success-header {
+            color: #2ecc71;
+            text-align: center;
+            padding: 20px 0;
+        }
+        .account-details {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .account-number {
+            font-size: 20px;
+            color: #3498db;
+            font-weight: bold;
+        }
+        .features-list {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status-approved {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <h1 class="success-header">🎉 Your Account is Now Active! 🎉</h1>
+        
+        <div class="status-approved">
+            <h3>✅ Account Status: Approved</h3>
+            <p>Great news! Your account has been verified and approved. You now have full access to all our banking services.</p>
+        </div>
+
+        <div class="account-details">
+            <h3>Account Information:</h3>
+            <p>Name: {{firstName}} {{lastName}}</p>
+            <p>Account Number: <span class="account-number">{{accountNumber}}</span></p>
+            <p>Email: {{email}}</p>
+        </div>
+        
+        <div class="features-list">
+            <h3>You can now:</h3>
+            <ul>
+                <li>Send and receive money</li>
+                <li>View your transaction history</li>
+                <li>Manage your account settings</li>
+                <li>Access all banking features</li>
+            </ul>
+        </div>
+
+        <center>
+            <a href="{{loginUrl}}" class="cta-button">Login to Your Account</a>
+        </center>
+
+        <p>If you have any questions about using your account, our support team is here to help!</p>
+        
+        <p>Best regards,<br>
+        Your Banking Team</p>
+        
+        <hr>
+        <p style="font-size: 12px; color: #666;">
+            This is an automated message. Please do not reply directly to this email.
+            For support, please contact our customer service team.
+        </p>
+    </div>
+</body>
+</html> 

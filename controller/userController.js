@@ -4,6 +4,10 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const sendEmail = require('../utils/sendEmail');
 const { v4: uuidv4 } = require('uuid');
+const Transaction = require('../models/Transaction');
+const cloudinary = require('../config/cloudinary');
+const fs = require('fs');
+const { sendRegistrationEmail } = require('../utils/emailService');
 
 // Generate unique account number
 const generateAccountNumber = async () => {
@@ -47,19 +51,30 @@ const registerUser = async (req, res) => {
             phoneNumber,
             password
         } = req.body;
-        if(!firstName || !middleName || !lastName || !gender || !address || !region || !zipCode || !email || !phoneNumber || !password){
+
+        // Check for required fields
+        if(!firstName || !middleName || !lastName || !gender || !address || 
+           !region || !zipCode || !email || !phoneNumber || !password) {
             return res.status(400).json({
                 success: false,
                 message: 'All fields are required'
             });
         }
+
+        // Check for required files
+        if (!req.files || !req.files.avatar || !req.files.idCard) {
+            return res.status(400).json({
+                success: false,
+                message: 'Both avatar and ID card are required'
+            });
+        }
+
         if(password.length < 6){
             return res.status(400).json({
                 success: false,
                 message: 'Password must be at least 6 characters long'
             });
         }
-
 
         // Check if user exists
         const userExists = await User.findOne({ 
@@ -75,6 +90,23 @@ const registerUser = async (req, res) => {
                 message: 'User already exists with this email or phone number'
             });
         }
+
+        // Upload avatar to cloudinary
+        const avatarResult = await cloudinary.uploader.upload(req.files.avatar[0].path, {
+            folder: 'avatars',
+            width: 300,
+            crop: "scale"
+        });
+
+        // Upload ID card to cloudinary
+        const idCardResult = await cloudinary.uploader.upload(req.files.idCard[0].path, {
+            folder: 'id_cards',
+            resource_type: 'auto'
+        });
+
+        // // Clean up uploaded files
+        // fs.unlinkSync(req.files.avatar[0].path);
+        // fs.unlinkSync(req.files.idCard[0].path);
 
         // Generate account number
         const accountNumber = await generateAccountNumber();
@@ -96,10 +128,27 @@ const registerUser = async (req, res) => {
             phoneNumber,
             password: hashedPassword,
             accountNumber,
-            isApproved: false // Default to unapproved
+            isApproved: false,
+            avatar: {
+                public_id: avatarResult.public_id,
+                url: avatarResult.secure_url
+            },
+            idCard: {
+                public_id: idCardResult.public_id,
+                url: idCardResult.secure_url,
+                verified: false
+            }
         });
 
         if (user) {
+            // Send registration email
+            await sendRegistrationEmail(user.email, {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                accountNumber: user.accountNumber,
+                email: user.email
+            });
+
             res.status(201).json({
                 success: true,
                 message: 'Registration successful. Please wait for admin approval.',
@@ -108,12 +157,19 @@ const registerUser = async (req, res) => {
                     firstName: user.firstName,
                     lastName: user.lastName,
                     email: user.email,
-                    accountNumber: user.accountNumber
+                    accountNumber: user.accountNumber,
+                    avatar: user.avatar
                 }
             });
         }
 
     } catch (error) {
+        // Clean up uploaded files in case of error
+        if (req.files) {
+            if (req.files.avatar) fs.unlinkSync(req.files.avatar[0].path);
+            if (req.files.idCard) fs.unlinkSync(req.files.idCard[0].path);
+        }
+
         res.status(500).json({
             success: false,
             message: 'Error registering user',
@@ -165,6 +221,8 @@ const loginUser = async (req, res) => {
                 lastName: user.lastName,
                 email: user.email,
                 accountNumber: user.accountNumber,
+                avatar: user.avatar,
+                idCard: user.idCard,
                 token: generateToken(user._id)
             }
         });
@@ -196,7 +254,7 @@ const getUserProfile = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: user
+            data: user // Now includes avatar and idCard information
         });
 
     } catch (error) {
@@ -417,6 +475,287 @@ const externalTransfer = async (req, res) => {
     }
 };
 
+// @desc    Get user transactions
+// @route   GET /api/users/transactions
+// @access  Private
+const getUserTransactions = async (req, res) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 10, 
+            type, 
+            status, 
+            startDate, 
+            endDate 
+        } = req.query;
+
+        // Build filter object
+        const filter = {
+            $or: [
+                { sender: req.user._id },
+                { receiver: req.user._id }
+            ]
+        };
+        
+        // Filter by type if provided
+        if (type) {
+            filter.type = type;
+        }
+
+        // Filter by status if provided
+        if (status) {
+            filter.status = status;
+        }
+
+        // Filter by date range if provided
+        if (startDate || endDate) {
+            filter.timestamp = {};
+            if (startDate) {
+                filter.timestamp.$gte = new Date(startDate);
+            }
+            if (endDate) {
+                filter.timestamp.$lte = new Date(endDate);
+            }
+        }
+
+        // Get transactions with pagination
+        const transactions = await Transaction.find(filter)
+            .populate('sender', 'firstName lastName email accountNumber')
+            .populate('receiver', 'firstName lastName email accountNumber')
+            .sort({ timestamp: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        // Get total count for pagination
+        const count = await Transaction.countDocuments(filter);
+
+        // Calculate transaction statistics
+        const stats = await Transaction.aggregate([
+            {
+                $match: filter
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalTransactions: { $sum: 1 },
+                    totalSent: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$sender', req.user._id] },
+                                '$amount',
+                                0
+                            ]
+                        }
+                    },
+                    totalReceived: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$receiver', req.user._id] },
+                                '$amount',
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                transactions,
+                totalPages: Math.ceil(count / limit),
+                currentPage: parseInt(page),
+                totalTransactions: count,
+                stats: stats[0] || {
+                    totalTransactions: 0,
+                    totalSent: 0,
+                    totalReceived: 0
+                }
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching transactions',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Change password
+// @route   PUT /api/users/settings/change-password
+// @access  Private
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide both current and new password'
+            });
+        }
+
+        // Get user with password
+        const user = await User.findById(req.user._id);
+
+        // Check current password
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Current password is incorrect'
+            });
+        }
+
+        // Validate new password
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 6 characters long'
+            });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Password updated successfully'
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error changing password',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Update contact information
+// @route   PUT /api/users/settings/update-contact
+// @access  Private
+const updateContactInfo = async (req, res) => {
+    try {
+        const { phoneNumber, address, region, zipCode } = req.body;
+        const updateFields = {};
+
+        // Validate phone number if provided
+        if (phoneNumber) {
+            // Check if phone number is already in use by another user
+            const existingUser = await User.findOne({ 
+                phoneNumber, 
+                _id: { $ne: req.user._id } 
+            });
+            
+            if (existingUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Phone number already in use'
+                });
+            }
+            updateFields.phoneNumber = phoneNumber;
+        }
+
+        // Update address fields if provided
+        if (address) updateFields.address = address;
+        if (region) updateFields.region = region;
+        if (zipCode) updateFields.zipCode = zipCode;
+
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        ).select('-password');
+
+        res.status(200).json({
+            success: true,
+            message: 'Contact information updated successfully',
+            data: user
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error updating contact information',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Delete account
+// @route   DELETE /api/users/settings/delete-account
+// @access  Private
+const deleteAccount = async (req, res) => {
+    try {
+        const { password } = req.body;
+
+        // Get user with password
+        const user = await User.findById(req.user._id);
+
+        // Verify password
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Password is incorrect'
+            });
+        }
+
+        // Check if user has any pending transactions
+        const pendingTransactions = await Transaction.findOne({
+            $or: [
+                { sender: req.user._id },
+                { receiver: req.user._id }
+            ],
+            status: 'pending'
+        });
+
+        if (pendingTransactions) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete account with pending transactions'
+            });
+        }
+
+        // Check if user has non-zero balance
+        if (user.balance > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please withdraw or transfer all funds before deleting account'
+            });
+        }
+
+        // Delete user's transactions
+        await Transaction.deleteMany({
+            $or: [
+                { sender: req.user._id },
+                { receiver: req.user._id }
+            ]
+        });
+
+        // Delete user
+        await User.findByIdAndDelete(req.user._id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Account deleted successfully'
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting account',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -424,5 +763,9 @@ module.exports = {
     verifyAccount,
     forgotPassword,
     resetPassword,
-    externalTransfer
+    externalTransfer,
+    getUserTransactions,
+    changePassword,
+    updateContactInfo,
+    deleteAccount
 };

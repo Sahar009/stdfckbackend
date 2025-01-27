@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Money Received</title>
+    <style>
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .amount {
+            font-size: 24px;
+            color: #2ecc71;
+            font-weight: bold;
+        }
+        .details {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <h2>Money Received! 💰</h2>
+        <p>Hello {{receiverName}},</p>
+        <p>You have received a money transfer to your account.</p>
+        
+        <div class="details">
+            <p>Amount: <span class="amount">{{amount}}</span></p>
+            <p>From: {{senderName}}</p>
+            <p>Transaction Reference: {{reference}}</p>
+            {{#if description}}
+            <p>Description: {{description}}</p>
+            {{/if}}
+            <p>Date: {{date}}</p>
+        </div>
+
+        <p>Your new balance is: {{newBalance}}</p>
+        
+        <p>Thank you for using our services!</p>
+        
+        <p>Best regards,<br>Your Banking Team</p>
+    </div>
+</body>
+</html> 
