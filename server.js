@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(cors({
-  origin:["http://localhost:5173"],
+  origin:["http://localhost:5173","https://stdfck.vercel.app"],
   credentials:true
 }));
 
@@ -50,7 +50,7 @@ const PORT =  process.env.PORT || 10000
 const start = async () => {
     try {
       await mongoose.connect(process.env.MONGO_URI);
-      app.listen(PORT, "localhost", () => {
+      app.listen(PORT,  () => {
         console.log("connected to DB");
         console.log(`Server listening on port ${PORT}`);
         
