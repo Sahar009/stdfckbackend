@@ -43,7 +43,7 @@ app.use("/api/v1/user",userRoute);
 app.use("/api/v1/user",walletRoute);
 // error middleware here
 app.use(errorMiddleware)
-
+// reuploading the server
 const PORT =  process.env.PORT || 10000
 
 const start = async () => {
