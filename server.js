@@ -13,6 +13,7 @@ require(serverPath);
 const adminRoute = require('./routes/adminRoutes')
 const userRoute = require('./routes/userRoutes')
 const walletRoute = require('./routes/walletRoutes')
+const initCronJobs = require('./utils/cronJob');
 // Configure Cloudinary with your credentials
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -52,6 +53,9 @@ const start = async () => {
       app.listen(PORT, "localhost", () => {
         console.log("connected to DB");
         console.log(`Server listening on port ${PORT}`);
+        
+        // Initialize cron jobs after server starts
+        initCronJobs();
       });
     } catch (error) {
       console.log(error);
