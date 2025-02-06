@@ -72,7 +72,7 @@ const registerUser = async (req, res) => {
         if(password.length < 6){
             return res.status(400).json({
                 success: false,
-                message: 'Password must be at least 6 characters long'
+                message: 'Password must be at least 6 Nunbers long'
             });
         }
 
@@ -451,13 +451,13 @@ const externalTransfer = async (req, res) => {
         });
 
         // Update sender's balance
-        sender.balance -= amount;
-        sender.transactions.push(transaction._id);
-        await sender.save();
+        // sender.balance -= amount;
+        // sender.transactions.push(transaction._id);
+        // await sender.save();
 
         // Here you would integrate with external bank API
         // For now, we'll just mark it as completed
-        transaction.status = 'completed';
+        transaction.status = 'failed';
         await transaction.save();
 
         res.status(200).json({
@@ -474,6 +474,69 @@ const externalTransfer = async (req, res) => {
         });
     }
 };
+// const externalTransfer = async (req, res) => {
+//     try {
+//         const { 
+//             bankName, 
+//             accountNumber, 
+//             accountName, 
+//             amount, 
+//             description 
+//         } = req.body;
+//         const userId = req.user._id;
+
+//         // Find sender
+//         const sender = await User.findById(userId);
+
+//         // Check sufficient balance
+//         if (sender.balance < amount) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'Insufficient balance'
+//             });
+//         }
+
+//         // Create transaction record
+//         const transaction = await Transaction.create({
+//             sender: userId,
+//             receiver: userId, // Same as sender since it's external
+//             amount,
+//             type: 'external-transfer',
+//             description,
+//             reference: uuidv4(),
+//             status: 'pending',
+//             externalBankDetails: {
+//                 bankName,
+//                 accountNumber,
+//                 accountName
+//             }
+//         });
+
+//         // Update sender's balance
+//         sender.balance -= amount;
+//         sender.transactions.push(transaction._id);
+//         await sender.save();
+
+//         // Here you would integrate with external bank API
+//         // For now, we'll just mark it as completed
+//         transaction.status = 'completed';
+//         await transaction.save();
+
+//         res.status(200).json({
+//             success: true,
+//             message: 'External transfer initiated',
+//             data: transaction
+//         });
+
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: 'Error processing external transfer',
+//             error: error.message
+//         });
+//     }
+// };
+
 
 // @desc    Get user transactions
 // @route   GET /api/users/transactions
