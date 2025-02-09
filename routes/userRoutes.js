@@ -17,13 +17,12 @@ const { protect } = require('../middleware/authMiddleware');
 const { protectAdmin } = require('../middleware/authMiddleware');
 const { getWalletBalance, transferMoney } = require('../controller/walletController');
 const { upload } = require('../middleware/uploadMiddleware');
-const { uploadAvatar, uploadIdCard } = require('../controller/uploadController');
+const { uploadAvatar } = require('../controller/uploadController');
 
 // Public routes
 router.post('/register', 
     upload.fields([
-        { name: 'avatar', maxCount: 1 },
-        { name: 'idCard', maxCount: 1 }
+        { name: 'avatar', maxCount: 1 }
     ]), 
     registerUser
 );
@@ -52,13 +51,6 @@ router.post(
     protect, 
     upload.single('avatar'), 
     uploadAvatar
-);
-
-router.post(
-    '/upload/id-card', 
-    protect, 
-    upload.single('idCard'), 
-    uploadIdCard
 );
 
 module.exports = router; 

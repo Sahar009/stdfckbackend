@@ -22,6 +22,22 @@ const transferMoney = async (req, res) => {
         const sender = await User.findById(senderId);
         const receiver = await User.findOne({ accountNumber: receiverAccountNumber });
 
+        // Check if sender's account is frozen
+        if (sender.isFrozen) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is frozen. Please contact support.'
+            });
+        }
+
+        // Check if receiver's account is frozen
+        if (receiver?.isFrozen) {
+            return res.status(403).json({
+                success: false,
+                message: 'Recipient account is frozen and cannot receive transfers.'
+            });
+        }
+
         // Check if receiver exists
         if (!receiver) {
             return res.status(404).json({

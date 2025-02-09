@@ -56,7 +56,11 @@ const userSchema = new mongoose.Schema({
   isApproved: {
     type: Boolean,
     default: false
-},
+  },
+  isFrozen: {
+    type: Boolean,
+    default: false
+  },
   accountNumber: {
     type: String,
     unique: true,
@@ -70,6 +74,7 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
   }],
+ 
   createdAt: {
     type: Date,
     default: Date.now,
@@ -79,14 +84,6 @@ const userSchema = new mongoose.Schema({
   avatar: {
     public_id: String,
     url: String,
-  },
-  idCard: {
-    public_id: String,
-    url: String,
-    verified: {
-      type: Boolean,
-      default: false
-    }
   }
 });
 

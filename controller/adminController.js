@@ -559,6 +559,67 @@ const deleteUser = async (req, res) => {
     }
 };
 
+// @desc    Get admin's action log
+// @route   GET /api/admin/actions-log
+// @access  Private (Admin only)
+const updateFrozenAccount = async (req, res) => {
+    const admin = await User.findById(req.admin._id);
+    res.status(200).json({
+        success: true,
+        data: admin.actionsLog
+    });
+};
+
+// @desc    Update user's frozen status
+// @route   PUT /api/admin/users/:id/freeze
+// @access  Private (Admin only)
+const updateFrozenStatus = async (req, res) => {
+    try {
+        const { isFrozen } = req.body;
+        const userId = req.params.id;
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.isFrozen = isFrozen;
+
+        // Log the action in admin's action log
+        const admin = await Admin.findById(req.admin._id);
+        admin.actionsLog.push({
+            action: isFrozen ? 'ACCOUNT_FROZEN' : 'ACCOUNT_UNFROZEN',
+            userId: user._id,
+            timestamp: Date.now()
+        });
+
+        // Save both user and admin documents
+        await Promise.all([user.save(), admin.save()]);
+
+        res.status(200).json({
+            success: true,
+            message: `User account ${isFrozen ? 'frozen' : 'unfrozen'} successfully`,
+            data: {
+                userId: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                isFrozen: user.isFrozen
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error updating frozen status',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     loginAdmin,
@@ -571,5 +632,6 @@ module.exports = {
     getUnverifiedIds,
     getAllUsers,
     getUserById,
-    deleteUser
+    deleteUser,
+    updateFrozenStatus
 };

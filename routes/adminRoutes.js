@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerAdmin, loginAdmin, approveUser, getPendingApprovals, getAllTransactions, getTransactionById, getTransactionStats, verifyUserIdCard, getUnverifiedIds, getAllUsers, getUserById, deleteUser } = require('../controller/adminController');
+const { registerAdmin, loginAdmin, approveUser, getPendingApprovals, getAllTransactions, getTransactionById, getTransactionStats, verifyUserIdCard, getUnverifiedIds, getAllUsers, getUserById, deleteUser, updateFrozenStatus } = require('../controller/adminController');
 const { protectAdmin } = require('../middleware/authMiddleware');
 const { adminCreditUser } = require('../controller/walletController');
 
@@ -26,5 +26,7 @@ router.put('/verify-id/:userId', protectAdmin, verifyUserIdCard);
 router.get('/users', protectAdmin, getAllUsers);
 router.get('/users/:id', protectAdmin, getUserById);
 router.delete('/users/:id', protectAdmin, deleteUser);
+router.put('/freeze/:id/', protectAdmin, updateFrozenStatus);
+
 
 module.exports = router;

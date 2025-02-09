@@ -62,10 +62,10 @@ const registerUser = async (req, res) => {
         }
 
         // Check for required files
-        if (!req.files || !req.files.avatar || !req.files.idCard) {
+        if (!req.files || !req.files.avatar) {
             return res.status(400).json({
                 success: false,
-                message: 'Both avatar and ID card are required'
+                message: 'Avatar is required'
             });
         }
 
@@ -98,15 +98,8 @@ const registerUser = async (req, res) => {
             crop: "scale"
         });
 
-        // Upload ID card to cloudinary
-        const idCardResult = await cloudinary.uploader.upload(req.files.idCard[0].path, {
-            folder: 'id_cards',
-            resource_type: 'auto'
-        });
-
-        // // Clean up uploaded files
-        // fs.unlinkSync(req.files.avatar[0].path);
-        // fs.unlinkSync(req.files.idCard[0].path);
+        // Clean up uploaded files
+        fs.unlinkSync(req.files.avatar[0].path);
 
         // Generate account number
         const accountNumber = await generateAccountNumber();
@@ -132,11 +125,6 @@ const registerUser = async (req, res) => {
             avatar: {
                 public_id: avatarResult.public_id,
                 url: avatarResult.secure_url
-            },
-            idCard: {
-                public_id: idCardResult.public_id,
-                url: idCardResult.secure_url,
-                verified: false
             }
         });
 
@@ -165,9 +153,8 @@ const registerUser = async (req, res) => {
 
     } catch (error) {
         // Clean up uploaded files in case of error
-        if (req.files) {
-            if (req.files.avatar) fs.unlinkSync(req.files.avatar[0].path);
-            if (req.files.idCard) fs.unlinkSync(req.files.idCard[0].path);
+        if (req.files && req.files.avatar) {
+            fs.unlinkSync(req.files.avatar[0].path);
         }
 
         res.status(500).json({
@@ -222,7 +209,6 @@ const loginUser = async (req, res) => {
                 email: user.email,
                 accountNumber: user.accountNumber,
                 avatar: user.avatar,
-                idCard: user.idCard,
                 token: generateToken(user._id)
             }
         });
@@ -254,7 +240,7 @@ const getUserProfile = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: user // Now includes avatar and idCard information
+            data: user // Now includes avatar information
         });
 
     } catch (error) {
@@ -412,68 +398,6 @@ const resetPassword = async (req, res) => {
 // @desc    External bank transfer
 // @route   POST /api/users/external-transfer
 // @access  Private
-const externalTransfer = async (req, res) => {
-    try {
-        const { 
-            bankName, 
-            accountNumber, 
-            accountName, 
-            amount, 
-            description 
-        } = req.body;
-        const userId = req.user._id;
-
-        // Find sender
-        const sender = await User.findById(userId);
-
-        // Check sufficient balance
-        if (sender.balance < amount) {
-            return res.status(400).json({
-                success: false,
-                message: 'Insufficient balance'
-            });
-        }
-
-        // Create transaction record
-        const transaction = await Transaction.create({
-            sender: userId,
-            receiver: userId, // Same as sender since it's external
-            amount,
-            type: 'external-transfer',
-            description,
-            reference: uuidv4(),
-            status: 'pending',
-            externalBankDetails: {
-                bankName,
-                accountNumber,
-                accountName
-            }
-        });
-
-        // Update sender's balance
-        // sender.balance -= amount;
-        // sender.transactions.push(transaction._id);
-        // await sender.save();
-
-        // Here you would integrate with external bank API
-        // For now, we'll just mark it as completed
-        transaction.status = 'failed';
-        await transaction.save();
-
-        res.status(200).json({
-            success: true,
-            message: 'External transfer initiated',
-            data: transaction
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error processing external transfer',
-            error: error.message
-        });
-    }
-};
 // const externalTransfer = async (req, res) => {
 //     try {
 //         const { 
@@ -487,6 +411,14 @@ const externalTransfer = async (req, res) => {
 
 //         // Find sender
 //         const sender = await User.findById(userId);
+
+//         // Check if account is frozen
+//         if (sender.isFrozen) {
+//             return res.status(403).json({
+//                 success: false,
+//                 message: 'Your account is frozen. Please contact support.'
+//             });
+//         }
 
 //         // Check sufficient balance
 //         if (sender.balance < amount) {
@@ -536,6 +468,74 @@ const externalTransfer = async (req, res) => {
 //         });
 //     }
 // };
+const externalTransfer = async (req, res) => {
+    try {
+        const { 
+            bankName, 
+            accountNumber, 
+            accountName, 
+            amount, 
+            description 
+        } = req.body;
+        const userId = req.user._id;
+
+        // Find sender
+        const sender = await User.findById(userId);
+
+        // Check sufficient balance
+        if (sender.balance < amount) {
+            return res.status(400).json({
+                success: false,
+                message: 'Insufficient balance'
+            });
+        }if(sender.isFrozen){
+            return res.status(400).json({
+                success: false,
+                message: 'You cannot initiate this transfer as account has been frozen kindly contact support'
+            });
+        }
+
+
+        // Create transaction record
+        const transaction = await Transaction.create({
+            sender: userId,
+            receiver: userId, // Same as sender since it's external
+            amount,
+            type: 'external-transfer',
+            description,
+            reference: uuidv4(),
+            status: 'pending',
+            externalBankDetails: {
+                bankName,
+                accountNumber,
+                accountName
+            }
+        });
+
+        // Update sender's balance
+        sender.balance -= amount;
+        sender.transactions.push(transaction._id);
+        await sender.save();
+
+        // Here you would integrate with external bank API
+        // For now, we'll just mark it as completed
+        transaction.status = 'completed';
+        await transaction.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'External transfer initiated',
+            data: transaction
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error processing external transfer',
+            error: error.message
+        });
+    }
+};
 
 
 // @desc    Get user transactions
