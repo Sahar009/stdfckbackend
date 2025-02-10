@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(cors({
-  origin:["http://unityfinance.online","http://localhost:5173","https://unity-lnjl.onrender.com"],
+  origin:["https://unityfinance.online","http://localhost:5173","https://unity-lnjl.onrender.com"],
   credentials:true
 }));
 
