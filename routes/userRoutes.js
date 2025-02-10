@@ -18,6 +18,7 @@ const { protectAdmin } = require('../middleware/authMiddleware');
 const { getWalletBalance, transferMoney } = require('../controller/walletController');
 const { upload } = require('../middleware/uploadMiddleware');
 const { uploadAvatar } = require('../controller/uploadController');
+const { testEmailConnection } = require('../utils/emailService');
 
 // Public routes
 router.post('/register', 
@@ -52,5 +53,7 @@ router.post(
     upload.single('avatar'), 
     uploadAvatar
 );
+
+router.get('/test-email', testEmailConnection);
 
 module.exports = router; 
