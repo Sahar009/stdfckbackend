@@ -153,6 +153,7 @@ const approveUser = async (req, res) => {
                 email: user.email,
                 loginUrl: process.env.FRONTEND_URL + '/login'
             });
+            console.log(user.email,'Email sent successfully');
         } catch (emailError) {
             console.error('Error sending approval email:', emailError);
             // Continue with the response even if email fails
@@ -559,16 +560,7 @@ const deleteUser = async (req, res) => {
     }
 };
 
-// @desc    Get admin's action log
-// @route   GET /api/admin/actions-log
-// @access  Private (Admin only)
-const updateFrozenAccount = async (req, res) => {
-    const admin = await User.findById(req.admin._id);
-    res.status(200).json({
-        success: true,
-        data: admin.actionsLog
-    });
-};
+
 
 // @desc    Update user's frozen status
 // @route   PUT /api/admin/users/:id/freeze
