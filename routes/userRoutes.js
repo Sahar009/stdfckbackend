@@ -11,7 +11,10 @@ const {
     getUserTransactions,
     changePassword,
     updateContactInfo,
-    deleteAccount
+    deleteAccount,
+    initiateLogin,
+    verifyLoginOTP,
+    resendLoginOTP
 } = require('../controller/userController');
 const { protect } = require('../middleware/authMiddleware');
 const { protectAdmin } = require('../middleware/authMiddleware');
@@ -27,7 +30,9 @@ router.post('/register',
     ]), 
     registerUser
 );
-router.post('/login', loginUser);
+router.post('/login/initiate', initiateLogin);
+router.post('/login/verify-otp', verifyLoginOTP);
+router.post('/login/resend-otp', resendLoginOTP);
 router.get('/profile', protect, getUserProfile);
 router.get('/verify-account/:accountNumber', verifyAccount);
 router.post('/forgot-password', forgotPassword);

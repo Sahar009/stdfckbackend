@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const Transaction = require('../models/Transaction');
 const cloudinary = require('../config/cloudinary');
 const fs = require('fs');
-const { sendRegistrationEmail } = require('../utils/emailService');
+const { sendRegistrationEmail, sendLoginOTP } = require('../utils/emailService');
 
 // Generate unique account number
 const generateAccountNumber = async () => {
@@ -819,6 +819,195 @@ const deleteAccount = async (req, res) => {
     }
 };
 
+// @desc    Initiate login
+// @route   POST /api/users/login/initiate
+// @access  Public
+const initiateLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check for user email
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Check if user is approved
+        if (!user.isApproved) {
+            return res.status(401).json({
+                success: false,
+                message: 'Account pending approval. Please wait for admin confirmation.'
+            });
+        }
+
+        // Check password
+        const isPasswordMatch = await bcrypt.compare(password, user.password);
+
+        if (!isPasswordMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+        // Save OTP to user document
+        user.otp = {
+            code: otp,
+            expiresAt: otpExpiry
+        };
+        await user.save();
+
+        // Send OTP email
+        await sendLoginOTP(user.email, otp);
+
+        res.status(200).json({
+            success: true,
+            message: 'OTP sent to your email',
+            data: {
+                email: user.email
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error initiating login',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Verify OTP and complete login
+// @route   POST /api/users/login/verify-otp
+// @access  Public
+const verifyLoginOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const user = await User.findOne({ email });
+
+        if (!user || !user.otp || !user.otp.code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid OTP request'
+            });
+        }
+
+        // Check if OTP is expired
+        if (user.otp.expiresAt < Date.now()) {
+            // Clear expired OTP
+            user.otp = undefined;
+            await user.save();
+            
+            return res.status(400).json({
+                success: false,
+                message: 'OTP has expired'
+            });
+        }
+
+        // Verify OTP
+        if (user.otp.code !== otp) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid OTP'
+            });
+        }
+
+        // Clear used OTP
+        user.otp = undefined;
+        await user.save();
+
+        // Generate token and send response
+        res.status(200).json({
+            success: true,
+            data: {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                accountNumber: user.accountNumber,
+                avatar: user.avatar,
+                token: generateToken(user._id)
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error verifying OTP',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Resend login OTP
+// @route   POST /api/users/login/resend-otp
+// @access  Public
+const resendLoginOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // Find user
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid request'
+            });
+        }
+
+        // Check if previous OTP was sent within last 1 minute (prevent spam)
+        if (user.otp && user.otp.expiresAt) {
+            const timeSinceLastOTP = Date.now() - (user.otp.expiresAt - 10 * 60 * 1000); // Calculate time since last OTP
+            if (timeSinceLastOTP < 60000) { // 60000ms = 1 minute
+                return res.status(429).json({
+                    success: false,
+                    message: 'Please wait 1 minute before requesting another OTP',
+                    waitTime: Math.ceil((60000 - timeSinceLastOTP) / 1000) // Remaining wait time in seconds
+                });
+            }
+        }
+
+        // Generate new OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+        // Save new OTP
+        user.otp = {
+            code: otp,
+            expiresAt: otpExpiry
+        };
+        await user.save();
+
+        // Send new OTP email
+        await sendLoginOTP(user.email, otp);
+
+        res.status(200).json({
+            success: true,
+            message: 'New OTP sent to your email',
+            data: {
+                email: user.email
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error resending OTP',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -830,5 +1019,8 @@ module.exports = {
     getUserTransactions,
     changePassword,
     updateContactInfo,
-    deleteAccount
+    deleteAccount,
+    initiateLogin,
+    verifyLoginOTP,
+    resendLoginOTP,
 };

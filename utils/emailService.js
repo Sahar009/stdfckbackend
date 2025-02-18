@@ -136,6 +136,18 @@ const sendAdminCreditEmail = async (userEmail, data) => {
     );
 };
 
+const sendLoginOTP = async (userEmail, otp) => {
+    await sendEmail(
+        userEmail,
+        'Login OTP Verification',
+        'loginOTP',
+        {
+            otp,
+            expiresIn: '10 minutes'
+        }
+    );
+};
+
 // Add this test function with more detailed logging
 const testEmailConnection = async () => {
     try {
@@ -189,5 +201,6 @@ module.exports = {
     sendAccountApprovedEmail,
     sendAdminCreditEmail,
     testEmailConnection,
-    sendEmail  // Export the generic sendEmail function too
+    sendEmail,  // Export the generic sendEmail function too
+    sendLoginOTP
 }; 
